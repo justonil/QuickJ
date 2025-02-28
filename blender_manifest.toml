@@ -1,0 +1,18 @@
+schema_version = "1.0.0"
+
+id = "quickj"
+version = "1.0.0"
+name = "Quick J ( Connect Vertex Path )"
+tagline = "Quickly connect vertices under the cursor"
+
+maintainer = "justOniL"
+
+type = "add-on"
+
+website = "https://github.com/justonil/QuickJ"
+
+blender_version_min = "2.8.0"
+
+license = [
+  "SPDX:GPL-3.0-or-later",
+]
