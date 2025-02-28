@@ -2,7 +2,7 @@
 ### Now you dont need to manually select 2nd vertex to connect vertices
 ## **Just hover and press J!**
 
-https://github.com/user-attachments/assets/5f687531-08a7-42c7-bdbd-bc6bcb0f4131
+![example](https://github.com/user-attachments/assets/03f5ec9a-adc5-4981-b1c5-ed37f6a1f5f0)
 
 You can control hover radius.
 
