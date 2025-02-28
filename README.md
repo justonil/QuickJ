@@ -18,3 +18,7 @@ Tested on **2.8**, **3.6**, **4.3**. Seems to work on all modern versions.
 
 ![image](https://github.com/user-attachments/assets/749bd11f-f249-485c-ab10-c1d7ace7b706)
 ![image](https://github.com/user-attachments/assets/4e049da5-3cfc-4ae6-9eab-c01badc1aa46)
+
+There also indication: 
+
+![Снимок экрана 2025-02-28 164109](https://github.com/user-attachments/assets/ed3bfa18-f3fc-4ed5-87e6-aface8e07695)
