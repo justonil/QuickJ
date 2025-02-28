@@ -2,19 +2,8 @@ import bpy
 import bmesh
 from bpy_extras import view3d_utils
 
-bl_info = {
-    "name": "Quick J ( Connect Vertex Path )",
-    "author": "justOniL",
-    "version": (1, 0),
-    "blender": (2, 8, 0),
-    "location": "",
-    "description": "Quickly connect vertices under the cursor",
-    "category": "Mesh",
-}
-
-
 class QuickConnectPreferences(bpy.types.AddonPreferences):
-    bl_idname = __name__
+    bl_idname = __package__
 
     radius: bpy.props.IntProperty(
         name="Radius",
@@ -55,7 +44,7 @@ class MESH_OT_quick_connect(bpy.types.Operator):
         obj = context.active_object
         me = obj.data
         bm = bmesh.from_edit_mesh(me)
-        prefs = context.preferences.addons[__name__].preferences
+        prefs = context.preferences.addons[__package__].preferences
 
         # Get original vertex
         original_vert = next((v for v in bm.verts if v.select), None)
@@ -158,6 +147,3 @@ def unregister():
     bpy.utils.unregister_class(MESH_OT_quick_connect)
     bpy.utils.unregister_class(QuickConnectPreferences)
 
-
-if __name__ == "__main__":
-    register()
