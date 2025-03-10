@@ -17,11 +17,17 @@ class QuickConnectPreferences(bpy.types.AddonPreferences):
         description="Deselect the first vertex and keep the second selected after connecting",
         default=True,
     )
+    success_info: bpy.props.BoolProperty(
+        name="Display Success Info",
+        description="Displaying success info on bottom of screen.",
+        default=True,
+    )
 
     def draw(self, context):
         layout = self.layout
         layout.prop(self, "radius")
         layout.prop(self, "deselect_first")
+        layout.prop(self, "success_info")
 
 
 class MESH_OT_quick_connect(bpy.types.Operator):
@@ -80,6 +86,19 @@ class MESH_OT_quick_connect(bpy.types.Operator):
             dist_sq = dx * dx + dy * dy
 
             if dist_sq < min_dist_sq:
+                # if x-ray is off, check occlusion:
+                if not context.space_data.shading.show_xray:
+                    origin = view3d_utils.region_2d_to_origin_3d(region, rv3d, (x, y))
+                    if origin is None:
+                        continue
+                    direction = (world_co - origin).normalized()
+                    depsgraph = context.evaluated_depsgraph_get()
+                    result, hit_loc, hit_normal, hit_index, hit_obj, matrix = context.scene.ray_cast(depsgraph, origin, direction)
+                    if result:
+                        d_hit = (hit_loc - origin).length
+                        d_vert = (world_co - origin).length
+                        if d_hit < d_vert - 1e-4:
+                            continue  # occluded
                 min_dist_sq = dist_sq
                 closest_vert = v
 
@@ -96,7 +115,13 @@ class MESH_OT_quick_connect(bpy.types.Operator):
         bmesh.update_edit_mesh(me)
 
         # Run standard connect operator
-        bpy.ops.mesh.vert_connect_path()
+        try:
+            bpy.ops.mesh.vert_connect_path()
+            if prefs.success_info:
+                self.report({'INFO'}, "Connected")
+        except RuntimeError as e:
+            self.report({'WARNING'}, "Could not connect vertices")
+            return {'CANCELLED'}
 
         if prefs.deselect_first:
             # Refresh bmesh after operation
