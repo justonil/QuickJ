@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "quickj"
-version = "1.1.1"
+version = "1.2.0"
 name = "Quick J ( Connect Vertex Path )"
 tagline = "Quickly connect vertices under the cursor"
 

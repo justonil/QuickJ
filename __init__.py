@@ -11,7 +11,6 @@ class QuickConnectPreferences(bpy.types.AddonPreferences):
         default=20,
         min=1,
     )
-
     deselect_first: bpy.props.BoolProperty(
         name="Deselect First Vertex",
         description="Deselect the first vertex and keep the second selected after connecting",
@@ -67,40 +66,61 @@ class MESH_OT_quick_connect(bpy.types.Operator):
         closest_vert = None
         min_dist_sq = prefs.radius ** 2
 
-        # Find closest unselected vertex within screen radius
-        for v in bm.verts:
-            if v.select:
+        # Raycast setup
+        origin = view3d_utils.region_2d_to_origin_3d(region, rv3d, (x, y))
+        direction = view3d_utils.region_2d_to_vector_3d(region, rv3d, (x, y))
+        depsgraph = context.evaluated_depsgraph_get()
+
+        ray_origin = origin
+        ray_direction = direction
+
+        xray_enabled = context.space_data.shading.show_xray
+
+        while True:
+            result, hit_loc, hit_normal, hit_index, hit_obj, matrix = context.scene.ray_cast(
+                depsgraph, ray_origin, ray_direction
+            )
+            if not result:
+                break
+
+            # Ignore non-active objects
+            if hit_obj != obj:
+                ray_origin = hit_loc + ray_direction * 0.001
                 continue
 
-            # Convert vertex to world coordinates
-            world_co = obj.matrix_world @ v.co
+            bm.faces.ensure_lookup_table()
+            if hit_index >= len(bm.faces):
+                break
 
-            # Project to 2D screen position
-            co_2d = view3d_utils.location_3d_to_region_2d(region, rv3d, world_co)
-            if not co_2d:
-                continue  # Vertex is behind the camera
+            face = bm.faces[hit_index]
 
-            # Calculate distance to mouse
-            dx = co_2d.x - x
-            dy = co_2d.y - y
-            dist_sq = dx * dx + dy * dy
+            for v in face.verts:
+                if v.select:
+                    continue
 
-            if dist_sq < min_dist_sq:
-                # if x-ray is off, check occlusion:
-                if not context.space_data.shading.show_xray:
-                    origin = view3d_utils.region_2d_to_origin_3d(region, rv3d, (x, y))
-                    if origin is None:
-                        continue
-                    direction = (world_co - origin).normalized()
-                    depsgraph = context.evaluated_depsgraph_get()
-                    result, hit_loc, hit_normal, hit_index, hit_obj, matrix = context.scene.ray_cast(depsgraph, origin, direction)
-                    if result:
-                        d_hit = (hit_loc - origin).length
-                        d_vert = (world_co - origin).length
-                        if d_hit < d_vert - 1e-4:
-                            continue  # occluded
-                min_dist_sq = dist_sq
-                closest_vert = v
+                # Convert vertex to world coordinates
+                world_co = obj.matrix_world @ v.co
+
+                # Project to 2D screen position
+                co_2d = view3d_utils.location_3d_to_region_2d(region, rv3d, world_co)
+                if not co_2d:
+                    continue
+
+                # Calculate distance to mouse
+                dx = co_2d.x - x
+                dy = co_2d.y - y
+                dist_sq = dx * dx + dy * dy
+
+                if dist_sq < min_dist_sq:
+                    min_dist_sq = dist_sq
+                    closest_vert = v
+
+            # Stop on first hit if X-Ray OFF
+            if not xray_enabled:
+                break
+
+            # Continue ray if X-Ray ON
+            ray_origin = hit_loc + ray_direction * 0.001
 
         if not closest_vert:
             self.report({'WARNING'}, "No vertex found under cursor (radius: %dpx)" % prefs.radius)
@@ -119,7 +139,7 @@ class MESH_OT_quick_connect(bpy.types.Operator):
             bpy.ops.mesh.vert_connect_path()
             if prefs.success_info:
                 self.report({'INFO'}, "Connected")
-        except RuntimeError as e:
+        except RuntimeError:
             self.report({'WARNING'}, "Could not connect vertices")
             return {'CANCELLED'}
 
@@ -171,4 +191,3 @@ def unregister():
     
     bpy.utils.unregister_class(MESH_OT_quick_connect)
     bpy.utils.unregister_class(QuickConnectPreferences)
-
