@@ -4,6 +4,12 @@
 
 ![example](https://github.com/user-attachments/assets/03f5ec9a-adc5-4981-b1c5-ed37f6a1f5f0)
 
+**New feature:**
+### **Visual Radius debug**
+
+<img width="640" height="538" alt="newfeature" src="https://github.com/user-attachments/assets/da9ad435-ecce-48d7-9838-547dc0339566" />
+
+#
 You can control hover radius.
 
 Also by default enabled deselection of other points except hovered one after operation.
@@ -14,7 +20,8 @@ But you can disable, if you dont need it or it conflict with something.
 
 **J** key is used by default to replace Blender default one. Can be changed in default Blender Keymap settings - **"Quick Connect Vertex Path"**.
 
-![image](https://github.com/user-attachments/assets/b28012c5-9f89-4cf9-a00a-90048abb4da9)
+<img width="574" height="319" alt="image" src="https://github.com/user-attachments/assets/901f4680-806d-4746-9f22-2890d7db0351" />
+
 ![image](https://github.com/user-attachments/assets/4e049da5-3cfc-4ae6-9eab-c01badc1aa46)
 
 There also indication: 
