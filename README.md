@@ -44,6 +44,10 @@ A readout panel reports the cursor position, whether the ray hit the mesh, the f
 - **X-Ray off** - only vertices on the surface directly under the cursor can be connected. Green vertices are shown for debugging but are never selected.
 - **X-Ray on** - the ray sees through geometry, so a visible vertex inside the radius can also be connected.
 
+## 1.3.1
+
+- Fixed: topology changing modifiers shown in edit mode (Triangulate, Remesh, Geometry Nodes, ...) broke vertex detection, so you had to hunt for a "good pixel". The search now raycasts the edit mesh itself with a BVH, so hit face indices always match the mesh being edited instead of the evaluated/modified mesh.
+
 ## 1.3.0
 
 - Added the live visual radius debug overlay (marker colors, readout panel, adjustable point size and position).

@@ -12,6 +12,7 @@ import math
 import bpy
 import bmesh
 from bpy_extras import view3d_utils
+from mathutils.bvhtree import BVHTree
 
 try:
     import blf
@@ -28,7 +29,6 @@ except Exception:  # pragma: no cover - only on very unusual builds
 # --------------------------------------------------------------------------- #
 
 _MAX_RAY_STEPS = 256        # safety cap for the x-ray ray march
-_RAY_EPSILON = 0.001        # step past a hit to keep marching
 _MAX_SCAN_VERTS = 50000     # above this we skip the full screen-space scan
 
 
@@ -144,73 +144,75 @@ def _project(obj, region, rv3d, co):
     return view3d_utils.location_3d_to_region_2d(region, rv3d, world)
 
 
-def _vertex_visible(context, depsgraph, obj, co, region, rv3d, screen):
-    """Approximate occlusion test for a single vertex.
+def _build_bvh(bm):
+    """BVH over the edit mesh itself.
 
-    Returns True when the vertex is not hidden behind geometry. Meshes with
-    modifiers are always treated as visible because the base mesh position does
-    not sit on the evaluated surface, which would produce false negatives.
+    `scene.ray_cast` returns indices into the *evaluated* mesh, so topology
+    changing modifiers (Triangulate, Remesh, Geometry Nodes, ...) make it
+    return triangles that do not map to base faces. A BVH built from the edit
+    bmesh always returns base face indices, which is what this tool edits.
     """
-    if obj.modifiers:
-        return True
+    bm.faces.ensure_lookup_table()
+    return BVHTree.FromBMesh(bm)
 
+
+def _to_local_ray(obj, origin, direction):
+    """Convert a world-space ray into the object's local space."""
+    inv = obj.matrix_world.inverted()
+    return inv @ origin, (inv.to_3x3() @ direction).normalized()
+
+
+def _vertex_visible(bvh, obj, co, region, rv3d, screen):
+    """Approximate occlusion test for a single vertex against the edit mesh."""
     origin = view3d_utils.region_2d_to_origin_3d(region, rv3d, (screen.x, screen.y))
     direction = view3d_utils.region_2d_to_vector_3d(region, rv3d, (screen.x, screen.y))
-    result, hit_loc, _normal, _index, hit_obj, _matrix = context.scene.ray_cast(
-        depsgraph, origin, direction
-    )
-    if not result:
+    local_origin, local_direction = _to_local_ray(obj, origin, direction)
+    hit_loc, _normal, _index, _dist = bvh.ray_cast(local_origin, local_direction)
+    if hit_loc is None:
         # Nothing was hit: the vertex is on the silhouette, so it is usable.
         return True
-    if hit_obj != obj:
-        return False
     world = obj.matrix_world @ co
+    hit_world = obj.matrix_world @ hit_loc
     tolerance = 1e-4 * max(1.0, world.length)
-    return (hit_loc - world).length <= tolerance
+    return (hit_world - world).length <= tolerance
 
 
-def _raycast_faces(context, obj, bm, region, rv3d, x, y, xray):
+def _raycast_faces(obj, bm, bvh, region, rv3d, x, y, xray):
     """March a ray through the cursor and collect the hit base-mesh faces."""
     origin = view3d_utils.region_2d_to_origin_3d(region, rv3d, (x, y))
     direction = view3d_utils.region_2d_to_vector_3d(region, rv3d, (x, y))
-    depsgraph = context.evaluated_depsgraph_get()
+    local_origin, local_direction = _to_local_ray(obj, origin, direction)
 
     faces = []
     hit = False
-    ray_origin = origin
-    ray_direction = direction
+    ray_origin = local_origin
 
     for _ in range(_MAX_RAY_STEPS):
-        result, hit_loc, _normal, hit_index, hit_obj, _matrix = context.scene.ray_cast(
-            depsgraph, ray_origin, ray_direction
-        )
-        if not result:
+        hit_loc, _normal, hit_index, distance = bvh.ray_cast(ray_origin, local_direction)
+        if hit_loc is None:
             break
 
-        if hit_obj != obj:
-            ray_origin = hit_loc + ray_direction * _RAY_EPSILON
-            continue
-
         hit = True
-        # hit_index is -1 when the face has no original index (generated
-        # geometry); never index backwards into the bmesh.
         if 0 <= hit_index < len(bm.faces):
             faces.append(bm.faces[hit_index])
 
         if not xray:
             break
-        ray_origin = hit_loc + ray_direction * _RAY_EPSILON
+        # Advance just past the hit (scale-aware, tiny in local units).
+        ray_origin = hit_loc + local_direction * max(1e-6, distance * 1e-6)
 
-    return hit, faces, depsgraph
+    return hit, faces
 
 
 def _run_search(context, obj, bm, region, rv3d, x, y, radius, xray,
-                exclude_index, debug):
+                exclude_index, debug, bvh=None):
     """Find the best vertex to connect and gather data for the overlay."""
     bm.verts.ensure_lookup_table()
     bm.faces.ensure_lookup_table()
+    if bvh is None:
+        bvh = _build_bvh(bm)
 
-    hit, faces, depsgraph = _raycast_faces(context, obj, bm, region, rv3d, x, y, xray)
+    hit, faces = _raycast_faces(obj, bm, bvh, region, rv3d, x, y, xray)
 
     result = {
         "hit": hit,
@@ -263,7 +265,7 @@ def _run_search(context, obj, bm, region, rv3d, x, y, radius, xray,
                     continue
                 result["in_radius"].append((co_2d, vert.index))
 
-                if _vertex_visible(context, depsgraph, obj, vert.co, region, rv3d, co_2d):
+                if _vertex_visible(bvh, obj, vert.co, region, rv3d, co_2d):
                     if xray and best_index is None and dist_sq < best_dist_sq:
                         best_dist_sq = dist_sq
                         best_index = vert.index
@@ -517,6 +519,7 @@ def _refresh_debug(context, event, operator, prefs):
     result = _run_search(
         context, obj, bm, region, rv3d, x, y,
         operator._radius, operator._xray, operator._original_index, debug=True,
+        bvh=operator._bvh,
     )
     operator._closest_index = result["chosen"]
 
@@ -547,6 +550,7 @@ class MESH_OT_quick_connect(bpy.types.Operator):
     _closest_index = None
     _radius = 20
     _xray = False
+    _bvh = None
 
     @classmethod
     def poll(cls, context):
@@ -591,6 +595,7 @@ class MESH_OT_quick_connect(bpy.types.Operator):
             _debug["position"] = prefs.debug_position
             _debug["point_size"] = prefs.debug_point_size
             _debug["region_ptr"] = region.as_pointer()
+            self._bvh = _build_bvh(bm)
             context.window_manager.modal_handler_add(self)
             _refresh_debug(context, event, self, prefs)
             context.area.tag_redraw()
@@ -638,6 +643,7 @@ class MESH_OT_quick_connect(bpy.types.Operator):
                 context, obj, bm, region, rv3d,
                 event.mouse_region_x, event.mouse_region_y,
                 self._radius, self._xray, self._original_index, debug=False,
+                bvh=self._bvh,
             )
             chosen = result["chosen"]
 
