@@ -30,6 +30,7 @@ except Exception:  # pragma: no cover - only on very unusual builds
 
 _MAX_RAY_STEPS = 256        # safety cap for the x-ray ray march
 _MAX_SCAN_VERTS = 50000     # above this we skip the full screen-space scan
+_OCCLUSION_EPS = 2e-3       # occlusion tolerance relative to view distance
 
 
 # --------------------------------------------------------------------------- #
@@ -173,7 +174,12 @@ def _vertex_visible(bvh, obj, co, region, rv3d, screen):
         return True
     world = obj.matrix_world @ co
     hit_world = obj.matrix_world @ hit_loc
-    tolerance = 1e-4 * max(1.0, world.length)
+    # A ray aimed at a corner/edge vertex can graze the adjacent face and hit a
+    # fraction of a unit away from the vertex itself. Base the tolerance on the
+    # view distance so silhouettes are not misclassified as occluded, while a
+    # surface actually in front (much further along the ray) still is.
+    view_dist = (world - origin).length
+    tolerance = _OCCLUSION_EPS * max(1.0, view_dist)
     return (hit_world - world).length <= tolerance
 
 
@@ -245,12 +251,13 @@ def _run_search(context, obj, bm, region, rv3d, x, y, radius, xray,
                 best_dist_sq = dist_sq
                 best_index = vert.index
 
-    # 2) Screen-space scan. Runs on the fallback path (nothing found on the hit
-    #    faces) and always in debug mode so ignored candidates become visible.
-    #    It may only *select* a vertex when x-ray is enabled: with x-ray off the
-    #    cursor ray defines the visible surface, so off-face vertices (including
-    #    back-facing ones near the silhouette) must stay excluded.
-    need_scan = debug or (best_index is None and xray)
+    # Scanning is used to visualize candidates (debug) and to fall back when the
+    # cursor is not over the mesh at all (empty space / just off a corner).
+    # A vertex found by the scan may only be *selected* when x-ray is enabled or
+    # when there was no hit face: with a hit face and x-ray off, that face is the
+    # visible surface under the cursor and off-face vertices must stay excluded.
+    allow_scan_select = xray or not hit
+    need_scan = debug or (best_index is None and allow_scan_select)
     if need_scan:
         if len(bm.verts) <= _MAX_SCAN_VERTS:
             result["scanned"] = True
@@ -266,7 +273,7 @@ def _run_search(context, obj, bm, region, rv3d, x, y, radius, xray,
                 result["in_radius"].append((co_2d, vert.index))
 
                 if _vertex_visible(bvh, obj, vert.co, region, rv3d, co_2d):
-                    if xray and best_index is None and dist_sq < best_dist_sq:
+                    if allow_scan_select and best_index is None and dist_sq < best_dist_sq:
                         best_dist_sq = dist_sq
                         best_index = vert.index
                     if vert.index not in result["considered"]:
@@ -496,7 +503,7 @@ def _build_readout(result, radius, xray, cursor, has_modifiers):
         )
     lines.append("red = on hit face   cyan = in radius   green = visible+ignored")
     if not xray:
-        lines.append("xray OFF: only verts on the hit face can be connected")
+        lines.append("xray OFF: on-surface -> hit face only; off-surface -> nearest visible")
     if not result["scanned"]:
         lines.append("full screen scan skipped: too many vertices")
     if has_modifiers:

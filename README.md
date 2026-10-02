@@ -44,6 +44,11 @@ A readout panel reports the cursor position, whether the ray hit the mesh, the f
 - **X-Ray off** - only vertices on the surface directly under the cursor can be connected. Green vertices are shown for debugging but are never selected.
 - **X-Ray on** - the ray sees through geometry, so a visible vertex inside the radius can also be connected.
 
+## 1.3.2
+
+- Fixed: hovering just off a corner/edge or in empty space (no face under the cursor) no longer fails to connect. With X-Ray off the search now falls back to the nearest *visible* vertex inside the radius, while still only using the face under the cursor when the cursor is actually on the surface.
+- Fixed: corner and silhouette vertices could be misclassified as hidden because a grazing ray hit the adjacent face. The occlusion tolerance is now relative to the view distance.
+
 ## 1.3.1
 
 - Fixed: topology changing modifiers shown in edit mode (Triangulate, Remesh, Geometry Nodes, ...) broke vertex detection, so you had to hunt for a "good pixel". The search now raycasts the edit mesh itself with a BVH, so hit face indices always match the mesh being edited instead of the evaluated/modified mesh.
