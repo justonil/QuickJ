@@ -44,6 +44,11 @@ A readout panel reports the cursor position, whether the ray hit the mesh, the f
 - **X-Ray off** - only vertices on the surface directly under the cursor can be connected. Green vertices are shown for debugging but are never selected.
 - **X-Ray on** - the ray sees through geometry, so a visible vertex inside the radius can also be connected.
 
+## 1.3.3
+
+- Added a **Show Readout** option so the debug overlay can show only the radius circle and vertex markers without the text panel.
+- The debug readout now defaults to the **Bottom Left** corner.
+
 ## 1.3.2
 
 - Fixed: hovering just off a corner/edge or in empty space (no face under the cursor) no longer fails to connect. With X-Ray off the search now falls back to the nearest *visible* vertex inside the radius, while still only using the face under the cursor when the cursor is actually on the surface.

@@ -48,8 +48,9 @@ _debug = {
     "occluded": [],     # in radius but hidden behind the surface
     "chosen": None,     # screen point of the vertex that will be connected
     "readout": [],
-    "position": 'TOP_LEFT',
+    "position": 'BOTTOM_LEFT',
     "point_size": 10,
+    "show_readout": True,
 }
 _draw_handle = None
 
@@ -112,7 +113,7 @@ class QuickConnectPreferences(bpy.types.AddonPreferences):
             ('BOTTOM_RIGHT', "Bottom Right", ""),
             ('CURSOR', "Follow Cursor", ""),
         ],
-        default='TOP_LEFT',
+        default='BOTTOM_LEFT',
     )
     debug_point_size: bpy.props.IntProperty(
         name="Point Size",
@@ -120,6 +121,11 @@ class QuickConnectPreferences(bpy.types.AddonPreferences):
         default=10,
         min=3,
         max=40,
+    )
+    debug_show_readout: bpy.props.BoolProperty(
+        name="Show Readout",
+        description="Show the text readout panel with cursor, hit face and candidate counts",
+        default=True,
     )
 
     def draw(self, context):
@@ -132,7 +138,10 @@ class QuickConnectPreferences(bpy.types.AddonPreferences):
         col = layout.column()
         col.enabled = self.debug_radius
         col.prop(self, "debug_point_size")
-        col.prop(self, "debug_position")
+        col.prop(self, "debug_show_readout")
+        sub = col.column()
+        sub.enabled = self.debug_show_readout
+        sub.prop(self, "debug_position")
 
 
 # --------------------------------------------------------------------------- #
@@ -400,6 +409,8 @@ def _draw_crosshair(shader, center):
 
 
 def _draw_readout(draw_shader):
+    if not _debug.get("show_readout", True):
+        return
     lines = _debug["readout"]
     context = bpy.context
     region = context.region
@@ -601,6 +612,7 @@ class MESH_OT_quick_connect(bpy.types.Operator):
             _debug["active"] = True
             _debug["position"] = prefs.debug_position
             _debug["point_size"] = prefs.debug_point_size
+            _debug["show_readout"] = prefs.debug_show_readout
             _debug["region_ptr"] = region.as_pointer()
             self._bvh = _build_bvh(bm)
             context.window_manager.modal_handler_add(self)
